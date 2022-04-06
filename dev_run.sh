@@ -21,7 +21,7 @@ chmod -R a+w /notebooks
 if [ -z "$JUPYTER_TOKEN" ]; then
     JUPYTER_TOKEN=$(cat /dev/urandom | tr -dc 'a-zA-Z0-9' | fold -w 48 | head -n 1)
 fi
-
+echo "Token: "  ${JUPYTER_TOKEN}
 # Note: print mocked jupyter token so that we can run this container as if it is a notebook within Gradient V1
 echo "http://localhost:8888/?token=${JUPYTER_TOKEN}"
 echo "http://localhost:8888/\?token\=${JUPYTER_TOKEN}"

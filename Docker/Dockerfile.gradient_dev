@@ -23,11 +23,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     apt-get install -y --no-install-recommends python-dev python3-pip python3-setuptools && \
     apt-get install ffmpeg libsm6 libxext6  -y && \
     rm -rf /var/lib/apt/lists/* && \
-    curl -o ~/miniconda.sh -O  https://repo.anaconda.com/miniconda/Miniconda3-latest-Linux-x86_64.sh  && \
-    chmod +x ~/miniconda.sh && \
-    ~/miniconda.sh -b -p /notebooks/conda && \
-    rm ~/miniconda.sh && \
-    /notebooks/conda/bin/conda install conda-build && \
     curl -fsSL https://code-server.dev/install.sh | sh
 
 # Create Environment
@@ -51,5 +46,5 @@ COPY nebula3_database /opt/program/nebula3_database
 COPY vlm /opt/program
 RUN chmod +x /opt/program/serve
 WORKDIR /notebooks
-EXPOSE 8888
-ENTRYPOINT ["/run.sh"]
+#EXPOSE 8888
+#ENTRYPOINT ["/run.sh"]
