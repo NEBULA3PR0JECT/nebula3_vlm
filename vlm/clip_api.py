@@ -19,7 +19,7 @@ class CLIP_API:
         if vlm_name == 'rn':
             self.model, self.preprocess = clip.load("RN50x64", self.device, download_root="/opt/models/clip_ms") 
         if vlm_name == 'vit':
-            self.model, self.preprocess = clip.load("ViT-L/14", self.device, download_root="/opt/models/clip_ms")
+            self.model, self.preprocess = clip.load("ViT-L/14@336px", self.device, download_root="/opt/models/clip_ms")
         #if vlm_name == 'vid':
         self.nre = MOVIE_DB()
         self.db = self.nre.db
