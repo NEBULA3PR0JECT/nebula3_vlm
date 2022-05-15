@@ -17,15 +17,18 @@ class CLIP_API:
         config = NEBULA_CONF()
         self.url_prefix = config.get_webserver()
         if vlm_name == 'rn':
-            self.model, self.preprocess = clip.load("RN50x64", self.device, download_root="/opt/models/clip_ms") 
+            self.model, self.preprocess = clip.load("RN50x64", self.device, download_root="/storage/models/clip_ms") 
         if vlm_name == 'vit':
-            self.model, self.preprocess = clip.load("ViT-L/14@336px", self.device, download_root="/opt/models/clip_ms")
+            self.model, self.preprocess = clip.load("ViT-L/14@336px", self.device, download_root="/storage/models/clip_ms")
         #if vlm_name == 'vid':
         self.nre = MOVIE_DB()
         self.db = self.nre.db
         self.clip_model = clip
         self.temp_file = "/tmp/file.mp4"
     
+    def get_model(self):
+        return(self.model, self.preprocess)
+        
     def download_video_file(self, movie):
         import cv2
         if os.path.exists(self.temp_file):
