@@ -76,7 +76,8 @@ class CLIP_OBJECT_DETECTOR:
                 place = place[0]
             place = place.replace('_', ' ')
             place_texts.append(place)
-        place_feats = self.get_text_feats([f'Photo of a {p}.' for p in place_texts])
+        prmt = [f'This is a {p} here.' for p in place_texts]
+        place_feats = self.get_text_feats(prmt)
         return(place_feats, place_texts)
 
     def load_object_feats(self, place_texts):
@@ -92,12 +93,14 @@ class CLIP_OBJECT_DETECTOR:
             safe_list = ''
             for variant in object_text.split(','):
                 text = variant.strip()
-                safe_list += f'{text}, '
-            safe_list = safe_list[:-2]
-            if len(safe_list) > 0:
-                object_texts.append(safe_list)
+                #safe_list += f'{text}, '
+            #safe_list = safe_list[:-2]
+            if len(text) > 0:
+                object_texts.append(text)
         object_texts = [o for o in list(set(object_texts)) if o not in place_texts]  # Remove redundant categories.
-        object_feats =self.get_text_feats([f'Photo of a {o}.' for o in object_texts])
+        #print(object_texts)
+        prmt = [f'Photo of a {o}.' for o in object_texts]
+        object_feats = self.get_text_feats(prmt)
         return(object_feats, object_texts)
     
     def clip_expert(self, frame, place_topk, obj_topk):
@@ -121,13 +124,14 @@ class CLIP_OBJECT_DETECTOR:
         else:
             ppl_result = f'are {ppl_result}'
         # Zero-shot VLM: classify places.
-        place_feats = self.get_text_feats([f'Scene of a {p}.' for p in place_texts ])
+        #place_feats = self.get_text_feats([f'Scene of a {p}.' for p in place_texts ])
         sorted_places, places_scores = self.get_nn_text(place_texts, place_feats, img_feats)
         # Zero-shot VLM: classify objects.
         sorted_obj_texts, obj_scores = self.get_nn_text(object_texts, object_feats, img_feats)
         object_list = ''
         for i in range(obj_topk):
             object_list += f'{sorted_obj_texts[i]}, '
+            #print(object_list)
         object_list = object_list[:-2]
         return(sorted_places[:place_topk], object_list, ppl_result)
     
@@ -150,14 +154,14 @@ class CLIP_OBJECT_DETECTOR:
                     if not ret:
                         print("File not found")
                     else:
-                        mdf_experts = self.clip_expert(frame_rgb, 5, 20)
+                        mdf_experts = self.clip_expert(frame_rgb, 3, 10)
                         scene_experts.append(mdf_experts)
                 return(scene_experts)
 
 def main():
     cod=CLIP_OBJECT_DETECTOR()
     #clip.clip_encode_video('/home/dimas/0028_The_Crying_Game_00_53_53_876-00_53_55_522.mp4','Movies/114207205',0)
-    res = cod.clip_experts_for_moive('Movies/114207205', 0)
+    res = cod.clip_experts_for_moive('Movies/114208149', 1)
     print(res)
 if __name__ == "__main__":
     main()
