@@ -5,6 +5,7 @@ import torch
 from PIL import Image
 import subprocess
 import os
+from pathlib import Path
 from vlm.clip_api import CLIP_API
 
 
@@ -19,9 +20,13 @@ class CLIP_OBJECT_DETECTOR:
         else:
             self.model.cpu().eval()
         self.img_size = self.model.visual.input_resolution
+        self.clip_api = clip_api
     
     def get_text_feats(self, in_text, batch_size=64):
-        text_tokens = clip.tokenize(in_text).cuda()
+        if torch.cuda.is_available():
+            text_tokens = clip.tokenize(in_text).cuda()
+        else: 
+            text_tokens = clip.tokenize(in_text).cpu()
         text_id = 0
         text_feats = np.zeros((len(in_text), self.clip_feat_dim), dtype=np.float32)
         while text_id < len(text_tokens):  # Batched inference.
@@ -38,8 +43,12 @@ class CLIP_OBJECT_DETECTOR:
     def get_img_feats(self, img):
         img_pil = Image.fromarray(np.uint8(img))
         img_in = self.preprocess(img_pil)[None, ...]
+        if torch.cuda.is_available():
+            img_in_c = img_in.cuda()
+        else:
+            img_in_c= img_in.cpu()
         with torch.no_grad():
-            img_feats = self.model.encode_image(img_in.cuda()).float()
+            img_feats = self.model.encode_image(img_in_c).float()
         img_feats /= img_feats.norm(dim=-1, keepdim=True)
         img_feats = np.float32(img_feats.cpu())
         return(img_feats)
@@ -94,7 +103,7 @@ class CLIP_OBJECT_DETECTOR:
         img_feats = self.get_img_feats(frame)
         place_feats, place_texts = self.load_place_feats()
         object_feats, object_texts = self.load_object_feats(place_texts)
-        img_types = ['photo', 'cartoon', 'sketch', 'painting']
+        img_types = ['photo', 'cartoon', 'sketch', 'painting', 'video', 'scene', 'shot', 'movie']
         img_types_feats = self.get_text_feats([f'This is a {t}.' for t in img_types])
         sorted_img_types, img_type_scores = self.get_nn_text(img_types, img_types_feats, img_feats)
         img_type = sorted_img_types[0]
@@ -120,3 +129,33 @@ class CLIP_OBJECT_DETECTOR:
             object_list += f'{sorted_obj_texts[i]}, '
         object_list = object_list[:-2]
         return(sorted_places[:place_topk], object_list, ppl_result)
+    
+    def clip_experts_for_moive(self, movie_id, scene_element):
+        movie_info, fps, fn = self.download_and_get_minfo(movie_id, to_print=True)
+        if (fn):
+            remote_api = self.clip_api.nre
+            metadata = remote_api.get_movie_info(movie_id)
+            mdfs = metadata['mdfs'][scene_element]
+            video_file = Path(fn)
+            file_name = fn
+            print(file_name)
+            if video_file.is_file():
+                cap = cv2.VideoCapture(fn)
+                scene_experts = []
+                for count, mdf in enumerate(mdfs):
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, mdf)
+                    ret, frame_ = cap.read() # Read the frame
+                    frame_rgb = cv2.cvtColor(frame_, cv2.COLOR_BGR2RGB)
+                    if not ret:
+                        print("File not found")
+                    else:
+                        mdf_experts = self.clip_expert(frame_rgb, 3, 10)
+                        scene_experts.append(mdf_experts)
+                return(scene_experts)
+
+def main():
+    cod=CLIP_OBJECT_DETECTOR()
+    #clip.clip_encode_video('/home/dimas/0028_The_Crying_Game_00_53_53_876-00_53_55_522.mp4','Movies/114207205',0)
+    cod.clip_experts_for_moive('')
+if __name__ == "__main__":
+    main()
