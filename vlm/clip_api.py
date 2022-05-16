@@ -109,11 +109,14 @@ class CLIP_API:
                         print("File not found")
                     else:
                         feature_t = self._calculate_images_features(frame_)
-                        feature_t /= feature_t.norm(dim=-1, keepdim=True)
-                        feature_mdfs.append(feature_t.cpu().detach().numpy())   
-                feature_mean = np.mean(feature_mdfs, axis=0)
-                feature_t = torch.from_numpy(feature_mean)                
-                return(feature_t.tolist()[0])                    
+                        # feature_t /= feature_t.norm(dim=-1, keepdim=True)
+                        # feature_mdfs.append(feature_t.cpu().detach().numpy())   
+                        feature_mdfs.append(feature_t)   
+                # feature_mean = np.mean(feature_mdfs, axis=0)
+                # feature_t = torch.from_numpy(feature_mean)                
+                # return(feature_t.tolist()[0]) 
+                mean_feats = torch.concat(feature_mdfs,dim=0).mean(dim=0, keepdim=True)                  
+                return mean_feats / mean_feats.norm()
         else:
             print("File doesn't exist: ", fn)
     
@@ -123,7 +126,7 @@ class CLIP_API:
             text_features = self.model.encode_text(text_input)
             text_features /= text_features.norm(dim=-1, keepdim=True)
         #print(text_features)
-        return(text_features.tolist()[0])
+        return text_features
     
     def clip_batch_encode_text(self, texts):
         string_texts = []
@@ -133,12 +136,14 @@ class CLIP_API:
         batch_features = []
         with torch.no_grad():
             text_features = self.model.encode_text(text_input)
-        for text_feature in text_features:
-            text_feature /= text_feature.norm(dim=-1, keepdim=True)
-            batch_features.append(text_feature.tolist()[0])
-            print("One vector", text_feature.tolist()[0])
-        print("All vecs ", batch_features)
-        return(batch_features)
+        # for text_feature in text_features:
+        #     text_feature /= text_feature.norm(dim=-1, keepdim=True)
+        #     batch_features.append(text_feature.tolist()[0])
+        #     print("One vector", text_feature.tolist()[0])
+        # print("All vecs ", batch_features)
+        # return(batch_features)
+        return text_features / text_features.norm(dim=1,keepdim=True).expand(text_features.shape)
+
 
 def main():
     clip=CLIP_API('vit')
