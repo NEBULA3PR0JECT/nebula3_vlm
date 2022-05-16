@@ -133,7 +133,7 @@ class CLIP_OBJECT_DETECTOR:
             object_list += f'{sorted_obj_texts[i]}, '
             #print(object_list)
         object_list = object_list[:-2]
-        return(sorted_places[:place_topk], object_list, ppl_result)
+        return(sorted_places[:place_topk], [object_list], [ppl_result])
     
     def clip_experts_for_moive(self, movie_id, scene_element):
         movie_info, fps, fn = self.clip_api.download_and_get_minfo(movie_id, to_print=True)
@@ -161,7 +161,7 @@ class CLIP_OBJECT_DETECTOR:
 def main():
     cod=CLIP_OBJECT_DETECTOR()
     #clip.clip_encode_video('/home/dimas/0028_The_Crying_Game_00_53_53_876-00_53_55_522.mp4','Movies/114207205',0)
-    res = cod.clip_experts_for_moive('Movies/114208149', 1)
+    res = cod.clip_experts_for_moive('Movies/114206358', 0)
     print(res)
 if __name__ == "__main__":
     main()
