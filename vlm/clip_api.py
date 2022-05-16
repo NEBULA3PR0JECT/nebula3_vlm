@@ -44,6 +44,7 @@ class CLIP_API:
             urllib.request.urlretrieve(url_link, self.temp_file) 
         video = cv2.VideoCapture(self.temp_file)
         fps = video.get(cv2.CAP_PROP_FPS)
+        print(fps)
         return(fps, url_link)
 
     def download_and_get_minfo(self, mid, to_print=False):

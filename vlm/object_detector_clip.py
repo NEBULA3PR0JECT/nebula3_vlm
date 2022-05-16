@@ -5,15 +5,16 @@ import torch
 from PIL import Image
 import subprocess
 import os
+import sys
 from pathlib import Path
 from vlm.clip_api import CLIP_API
 
 
 class CLIP_OBJECT_DETECTOR:
-    def __init__(self, vlm_name):
+    def __init__(self):
         # clip_version = "ViT-L/14@336px"
         self.clip_feat_dim = 768
-        clip_api = CLIP_API()
+        clip_api = CLIP_API('vit')
         self.model, self.preprocess = clip_api.get_model()
         if torch.cuda.is_available():
             self.model.cuda().eval()
@@ -64,7 +65,7 @@ class CLIP_OBJECT_DETECTOR:
     def load_place_feats(self):
         # Load scene categories from Places365.
         if not os.path.exists('categories_places365.txt'):
-            subprocess.run("wget", "https://raw.githubusercontent.com/zhoubolei/places_devkit/master/categories_places365.txt")
+            subprocess.run(["/usr/bin/wget", "https://raw.githubusercontent.com/zhoubolei/places_devkit/master/categories_places365.txt"])
         place_categories = np.loadtxt('categories_places365.txt', dtype=str)
         place_texts = []
         for place in place_categories[:, 0]:
@@ -75,12 +76,12 @@ class CLIP_OBJECT_DETECTOR:
                 place = place[0]
             place = place.replace('_', ' ')
             place_texts.append(place)
-        place_feats = self.get_img_feats([f'Photo of a {p}.' for p in place_texts])
+        place_feats = self.get_text_feats([f'Photo of a {p}.' for p in place_texts])
         return(place_feats, place_texts)
 
     def load_object_feats(self, place_texts):
         if not os.path.exists('dictionary_and_semantic_hierarchy.txt'):
-            subprocess.run("wget", "https://raw.githubusercontent.com/Tencent/tencent-ml-images/master/data/dictionary_and_semantic_hierarchy.txt")
+            subprocess.run(["/usr/bin/wget", "https://raw.githubusercontent.com/Tencent/tencent-ml-images/master/data/dictionary_and_semantic_hierarchy.txt"])
         with open('dictionary_and_semantic_hierarchy.txt') as fid:
             object_categories = fid.readlines()
         object_texts = []
@@ -120,7 +121,7 @@ class CLIP_OBJECT_DETECTOR:
         else:
             ppl_result = f'are {ppl_result}'
         # Zero-shot VLM: classify places.
-        place_feats = self.get_text_feats([f'Photo of a {p}.' for p in place_texts ])
+        place_feats = self.get_text_feats([f'Scene of a {p}.' for p in place_texts ])
         sorted_places, places_scores = self.get_nn_text(place_texts, place_feats, img_feats)
         # Zero-shot VLM: classify objects.
         sorted_obj_texts, obj_scores = self.get_nn_text(object_texts, object_feats, img_feats)
@@ -131,7 +132,7 @@ class CLIP_OBJECT_DETECTOR:
         return(sorted_places[:place_topk], object_list, ppl_result)
     
     def clip_experts_for_moive(self, movie_id, scene_element):
-        movie_info, fps, fn = self.download_and_get_minfo(movie_id, to_print=True)
+        movie_info, fps, fn = self.clip_api.download_and_get_minfo(movie_id, to_print=True)
         if (fn):
             remote_api = self.clip_api.nre
             metadata = remote_api.get_movie_info(movie_id)
@@ -149,13 +150,14 @@ class CLIP_OBJECT_DETECTOR:
                     if not ret:
                         print("File not found")
                     else:
-                        mdf_experts = self.clip_expert(frame_rgb, 3, 10)
+                        mdf_experts = self.clip_expert(frame_rgb, 5, 20)
                         scene_experts.append(mdf_experts)
                 return(scene_experts)
 
 def main():
     cod=CLIP_OBJECT_DETECTOR()
     #clip.clip_encode_video('/home/dimas/0028_The_Crying_Game_00_53_53_876-00_53_55_522.mp4','Movies/114207205',0)
-    cod.clip_experts_for_moive('')
+    res = cod.clip_experts_for_moive('Movies/114207205', 0)
+    print(res)
 if __name__ == "__main__":
     main()
