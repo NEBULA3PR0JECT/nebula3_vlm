@@ -22,7 +22,7 @@ class CLIP_OBJECT_DETECTOR:
             self.model.cpu().eval()
         self.img_size = self.model.visual.input_resolution
         self.clip_api = clip_api
-    
+
     def get_text_feats(self, in_text, batch_size=64):
         if torch.cuda.is_available():
             text_tokens = clip.tokenize(in_text).cuda()
@@ -76,7 +76,7 @@ class CLIP_OBJECT_DETECTOR:
                 place = place[0]
             place = place.replace('_', ' ')
             place_texts.append(place)
-        prmt = [f'This is a {p} here.' for p in place_texts]
+        prmt = [f'Image of a {p}' for p in place_texts]
         place_feats = self.get_text_feats(prmt)
         return(place_feats, place_texts)
 
@@ -99,18 +99,14 @@ class CLIP_OBJECT_DETECTOR:
                 object_texts.append(text)
         object_texts = [o for o in list(set(object_texts)) if o not in place_texts]  # Remove redundant categories.
         #print(object_texts)
-        prmt = [f'Photo of a {o}.' for o in object_texts]
+        prmt = [f'Image of a {o}' for o in object_texts]
         object_feats = self.get_text_feats(prmt)
         return(object_feats, object_texts)
-    
+
     def clip_expert(self, frame, place_topk, obj_topk):
         img_feats = self.get_img_feats(frame)
         place_feats, place_texts = self.load_place_feats()
         object_feats, object_texts = self.load_object_feats(place_texts)
-        img_types = ['photo', 'cartoon', 'sketch', 'painting', 'video', 'scene', 'shot', 'movie']
-        img_types_feats = self.get_text_feats([f'This is a {t}.' for t in img_types])
-        sorted_img_types, img_type_scores = self.get_nn_text(img_types, img_types_feats, img_feats)
-        img_type = sorted_img_types[0]
         # Zero-shot VLM: classify number of people.
         ppl_texts = ['no people', 'people']
         ppl_feats = self.get_text_feats([f'There are {p} in this photo.' for p in ppl_texts])
@@ -134,7 +130,7 @@ class CLIP_OBJECT_DETECTOR:
             #print(object_list)
         object_list = object_list[:-2]
         return(sorted_places[:place_topk], [object_list], [ppl_result])
-    
+
     def clip_experts_for_moive(self, movie_id, scene_element):
         movie_info, fps, fn = self.clip_api.download_and_get_minfo(movie_id, to_print=True)
         if (fn):
@@ -147,7 +143,7 @@ class CLIP_OBJECT_DETECTOR:
             if video_file.is_file():
                 cap = cv2.VideoCapture(fn)
                 scene_experts = []
-                for count, mdf in enumerate(mdfs):
+                for mdf in range(mdfs[0], mdfs[2]):
                     cap.set(cv2.CAP_PROP_POS_FRAMES, mdf)
                     ret, frame_ = cap.read() # Read the frame
                     frame_rgb = cv2.cvtColor(frame_, cv2.COLOR_BGR2RGB)
@@ -158,10 +154,13 @@ class CLIP_OBJECT_DETECTOR:
                         scene_experts.append(mdf_experts)
                 return(scene_experts)
 
+
 def main():
-    cod=CLIP_OBJECT_DETECTOR()
+    cod = CLIP_OBJECT_DETECTOR()
     #clip.clip_encode_video('/home/dimas/0028_The_Crying_Game_00_53_53_876-00_53_55_522.mp4','Movies/114207205',0)
-    res = cod.clip_experts_for_moive('Movies/114206358', 0)
+    res = cod.clip_experts_for_moive('Movies/114208367', 0)
     print(res)
+
+
 if __name__ == "__main__":
     main()
