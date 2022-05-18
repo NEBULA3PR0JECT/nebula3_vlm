@@ -23,6 +23,22 @@ class CLIP_OBJECT_DETECTOR:
         self.img_size = self.model.visual.input_resolution
         self.clip_api = clip_api
 
+    def average_frames(self, frames):
+        image_data = []
+        for img in frames:
+            this_image = cv2.imread(img, 1)
+            image_data.append(this_image)
+
+        avg_image = image_data[0]
+        for i in range(len(image_data)):
+            if i == 0:
+                pass
+            else:
+                alpha = 1.0/(i + 1)
+                beta = 1.0 - alpha
+                avg_image = cv2.addWeighted(image_data[i], alpha, avg_image, beta, 0.0)
+        return(avg_image)
+
     def get_text_feats(self, in_text, batch_size=64):
         if torch.cuda.is_available():
             text_tokens = clip.tokenize(in_text).cuda()
@@ -131,12 +147,12 @@ class CLIP_OBJECT_DETECTOR:
         sorted_places, places_scores = self.get_nn_text(place_texts, place_feats, img_feats)
         # Zero-shot VLM: classify objects.
         sorted_obj_texts, obj_scores = self.get_nn_text(object_texts, object_feats, img_feats)
-        object_list = ''
-        for i in range(obj_topk):
-            object_list += f'{sorted_obj_texts[i]}, '
+        #object_list = ''
+        #for i in range(obj_topk):
+            #object_list += f'{sorted_obj_texts[i]}, '
             #print(object_list)
-        object_list = object_list[:-2]
-        return(sorted_places[:place_topk], [object_list], [ppl_result])
+        #object_list = object_list[:-2]
+        return(sorted_places[:place_topk], [sorted_obj_texts[:obj_topk], obj_scores[:obj_topk]], [ppl_result])
 
     def clip_experts_for_moive(self, movie_id, scene_element):
         movie_info, fps, fn = self.clip_api.download_and_get_minfo(movie_id, to_print=True)
