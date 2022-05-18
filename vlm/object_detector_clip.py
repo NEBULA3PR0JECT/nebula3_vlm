@@ -121,28 +121,34 @@ class CLIP_OBJECT_DETECTOR:
 
     def mdf_selection(self, frame):
         img_feats = self.get_img_feats(frame)
-        frame_texts = ['a blurry photo', 'a good photo']
+        frame_texts = ['a blurry frame of video', 'a sharp frame of video']
         frame_feats = self.get_text_feats([f'{p}.' for p in frame_texts])
         sorted_frame_texts, frame_scores = self.get_nn_text(frame_texts, frame_feats, img_feats)
-        print(sorted_frame_texts[0], " ", frame_scores[0])
-        return(sorted_frame_texts[0], frame_scores[0])
+        #print(sorted_frame_texts[0], " ", frame_scores[0])
+        ppl_texts = ['no people', 'people']
+        ppl_feats = self.get_text_feats([f'There are {p} in this photo.' for p in ppl_texts])
+        sorted_ppl_texts, ppl_scores = self.get_nn_text(ppl_texts, ppl_feats, img_feats)
+        ppl_result = sorted_ppl_texts[0]
+        if ppl_result == 'people':
+            if sorted_frame_texts[0] == 'a sharp frame of video':
+                frame_texts = ['many different objects in a frame of video', 'blurry backgound in a frame of video']
+                frame_feats = self.get_text_feats([f'{p}.' for p in frame_texts])
+                sorted_frame_texts, frame_scores = self.get_nn_text(frame_texts, frame_feats, img_feats)
+                #print(".............",sorted_frame_texts[0], " ", frame_scores[0])
+                if sorted_frame_texts[0] == 'blurry backgound in a frame of video':
+                    return(0)
+                return(1)
+        return(0)
 
     def clip_expert(self, frame, place_topk, obj_topk):
         img_feats = self.get_img_feats(frame)
         place_feats, place_texts = self.load_place_feats()
         object_feats, object_texts = self.load_object_feats(place_texts)
         # Zero-shot VLM: classify number of people.
-        ppl_texts = ['no people', 'people']
-        ppl_feats = self.get_text_feats([f'There are {p} in this photo.' for p in ppl_texts])
+        ppl_texts = ['is one person', 'are two people', 'are three people', 'are several people', 'are many people']
+        ppl_feats = self.get_text_feats([f'There {p} in this photo.' for p in ppl_texts])
         sorted_ppl_texts, ppl_scores = self.get_nn_text(ppl_texts, ppl_feats, img_feats)
         ppl_result = sorted_ppl_texts[0]
-        if ppl_result == 'people':
-            ppl_texts = ['is one person', 'are two people', 'are three people', 'are several people', 'are many people']
-            ppl_feats = self.get_text_feats([f'There {p} in this photo.' for p in ppl_texts])
-            sorted_ppl_texts, ppl_scores = self.get_nn_text(ppl_texts, ppl_feats, img_feats)
-            ppl_result = sorted_ppl_texts[0]
-        else:
-            ppl_result = f'are {ppl_result}'
         # Zero-shot VLM: classify places.
         #place_feats = self.get_text_feats([f'Scene of a {p}.' for p in place_texts ])
         sorted_places, places_scores = self.get_nn_text(place_texts, place_feats, img_feats)
@@ -175,15 +181,17 @@ class CLIP_OBJECT_DETECTOR:
                         print("File not found")
                     else:
                         #mdf_experts = self.clip_expert(frame_rgb, 3, 10)
-                        mdf_experts = self.mdf_selection(frame_rgb)
-                        scene_experts.append(mdf_experts)
+                        good_frame = self.mdf_selection(frame_rgb)
+                        if good_frame  == 1:
+                            mdf_experts = self.clip_expert(frame_rgb, 3, 10)
+                            scene_experts.append(mdf_experts)
                 return(scene_experts)
 
 
 def main():
     cod = CLIP_OBJECT_DETECTOR()
     #clip.clip_encode_video('/home/dimas/0028_The_Crying_Game_00_53_53_876-00_53_55_522.mp4','Movies/114207205',0)
-    res = cod.clip_experts_for_moive('Movies/114208367', 0)
+    res = cod.clip_experts_for_moive('Movies/114207205', 0)
     print(res)
 
 
