@@ -22,6 +22,8 @@ class CLIP_OBJECT_DETECTOR:
             self.model.cpu().eval()
         self.img_size = self.model.visual.input_resolution
         self.clip_api = clip_api
+        self.place_feats, self.place_texts = self.load_place_feats()
+        self.object_feats, self.object_texts = self.load_object_feats(self.place_texts)
 
     def average_frames(self, frames):
         image_data = []
@@ -129,8 +131,6 @@ class CLIP_OBJECT_DETECTOR:
 
     def clip_expert(self, frame, place_topk, obj_topk):
         img_feats = self.get_img_feats(frame)
-        place_feats, place_texts = self.load_place_feats()
-        object_feats, object_texts = self.load_object_feats(place_texts)
         # Zero-shot VLM: classify number of people.
         ppl_texts = ['no people', 'people']
         ppl_feats = self.get_text_feats([f'There are {p} in this photo.' for p in ppl_texts])
@@ -145,9 +145,9 @@ class CLIP_OBJECT_DETECTOR:
             ppl_result = f'are {ppl_result}'
         # Zero-shot VLM: classify places.
         #place_feats = self.get_text_feats([f'Scene of a {p}.' for p in place_texts ])
-        sorted_places, places_scores = self.get_nn_text(place_texts, place_feats, img_feats)
+        sorted_places, places_scores = self.get_nn_text(self.place_texts, self.place_feats, img_feats)
         # Zero-shot VLM: classify objects.
-        sorted_obj_texts, obj_scores = self.get_nn_text(object_texts, object_feats, img_feats)
+        sorted_obj_texts, obj_scores = self.get_nn_text(self.object_texts, self.object_feats, img_feats)
         #object_list = ''
         #for i in range(obj_topk):
             #object_list += f'{sorted_obj_texts[i]}, '
