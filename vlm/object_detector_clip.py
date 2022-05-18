@@ -125,6 +125,7 @@ class CLIP_OBJECT_DETECTOR:
         frame_feats = self.get_text_feats([f'{p}.' for p in frame_texts])
         sorted_frame_texts, frame_scores = self.get_nn_text(frame_texts, frame_feats, img_feats)
         print(sorted_frame_texts[0], " ", frame_scores[0])
+        return(sorted_frame_texts[0], frame_scores[0])
 
     def clip_expert(self, frame, place_topk, obj_topk):
         img_feats = self.get_img_feats(frame)
@@ -173,7 +174,8 @@ class CLIP_OBJECT_DETECTOR:
                     if not ret:
                         print("File not found")
                     else:
-                        mdf_experts = self.clip_expert(frame_rgb, 3, 10)
+                        #mdf_experts = self.clip_expert(frame_rgb, 3, 10)
+                        mdf_experts = self.mdf_selection(frame_rgb)
                         scene_experts.append(mdf_experts)
                 return(scene_experts)
 
