@@ -6,6 +6,7 @@ from PIL import Image
 import subprocess
 import os
 import sys
+from itertools import islice
 from pathlib import Path
 from vlm.clip_api import CLIP_API
 
@@ -24,22 +25,32 @@ class CLIP_OBJECT_DETECTOR:
         self.clip_api = clip_api
         self.place_feats, self.place_texts = self.load_place_feats()
         self.object_feats, self.object_texts = self.load_object_feats(self.place_texts)
+        print("Done loading texts")
 
-    def average_frames(self, frames):
-        image_data = []
-        for img in frames:
-            this_image = cv2.imread(img, 1)
-            image_data.append(this_image)
+    def patch_frames_v(self, frame):
+        h, w, channels = frame.shape
+        half2 = h//2
+        top = frame[:half2, :]
+        bottom = frame[half2:, :]
+        # saving all the images
+        # cv2.imwrite() function will save the image 
+        # into your pc
+        return(top, bottom)
+    
+    def patch_frames_h(self, frame):
+        h, w, channels = frame.shape
+        half = w//2
+        # this will be the first column
+        left_part = frame[:, :half] 
 
-        avg_image = image_data[0]
-        for i in range(len(image_data)):
-            if i == 0:
-                pass
-            else:
-                alpha = 1.0/(i + 1)
-                beta = 1.0 - alpha
-                avg_image = cv2.addWeighted(image_data[i], alpha, avg_image, beta, 0.0)
-        return(avg_image)
+        right_part = frame[:, half:]  
+
+        # [:,half:] means al the rows and all
+        # saving all the images
+        # cv2.imwrite() function will save the image 
+        # into your pc
+        return(right_part, left_part)
+       
 
     def get_text_feats(self, in_text, batch_size=64):
         if torch.cuda.is_available():
@@ -94,7 +105,7 @@ class CLIP_OBJECT_DETECTOR:
                 place = place[0]
             place = place.replace('_', ' ')
             place_texts.append(place)
-        prmt = [f'Image of a {p}' for p in place_texts]
+        prmt = [f'They are located in {p}' for p in place_texts]
         place_feats = self.get_text_feats(prmt)
         return(place_feats, place_texts)
 
@@ -117,29 +128,30 @@ class CLIP_OBJECT_DETECTOR:
                 object_texts.append(text)
         object_texts = [o for o in list(set(object_texts)) if o not in place_texts]  # Remove redundant categories.
         #print(object_texts)
-        prmt = [f'Image of a {o}' for o in object_texts]
+        prmt = [f'Picture of a {o}' for o in object_texts]
+        #prmt = [f'This is a {o} in the photo' for o in object_texts]
         object_feats = self.get_text_feats(prmt)
         return(object_feats, object_texts)
 
     def mdf_selection(self, frame):
         img_feats = self.get_img_feats(frame)
-        frame_texts = ['a blurry frame of video', 'a sharp frame of video']
+        frame_texts = ['a low quality frame of video', 'a high quality frame of video']
         frame_feats = self.get_text_feats([f'{p}.' for p in frame_texts])
         sorted_frame_texts, frame_scores = self.get_nn_text(frame_texts, frame_feats, img_feats)
-        #print(sorted_frame_texts[0], " ", frame_scores[0])
+        print(sorted_frame_texts[0], " ", frame_scores[0])
         ppl_texts = ['no people', 'people']
         ppl_feats = self.get_text_feats([f'There are {p} in this photo.' for p in ppl_texts])
         sorted_ppl_texts, ppl_scores = self.get_nn_text(ppl_texts, ppl_feats, img_feats)
         ppl_result = sorted_ppl_texts[0]
-        if ppl_result == 'people':
-            if sorted_frame_texts[0] == 'a sharp frame of video':
-                frame_texts = ['many different objects in a frame of video', 'blurry backgound in a frame of video']
-                frame_feats = self.get_text_feats([f'{p}.' for p in frame_texts])
-                sorted_frame_texts, frame_scores = self.get_nn_text(frame_texts, frame_feats, img_feats)
-                #print(".............",sorted_frame_texts[0], " ", frame_scores[0])
-                if sorted_frame_texts[0] == 'blurry backgound in a frame of video':
-                    return(0)
-                return(1)
+        #if ppl_result == 'people':
+        if sorted_frame_texts[0] == 'a high quality frame of video':
+            frame_texts = ['many different objects in a frame of video', 'blurry backgound in a frame of video']
+            frame_feats = self.get_text_feats([f'{p}.' for p in frame_texts])
+            sorted_frame_texts, frame_scores = self.get_nn_text(frame_texts, frame_feats, img_feats)
+            print(".............",sorted_frame_texts[0], " ", frame_scores[0])
+            if sorted_frame_texts[0] == 'blurry backgound in a frame of video':
+                return(0)
+            return(1)
         return(0)
 
     def clip_expert(self, frame, place_topk, obj_topk):
@@ -172,26 +184,43 @@ class CLIP_OBJECT_DETECTOR:
             print(file_name)
             if video_file.is_file():
                 cap = cv2.VideoCapture(fn)
-                scene_experts = []
+                locations_ = []
+                objects_ = []
                 for mdf in range(mdfs[0], mdfs[2]):
                     cap.set(cv2.CAP_PROP_POS_FRAMES, mdf)
-                    ret, frame_ = cap.read() # Read the frame
-                    frame_rgb = cv2.cvtColor(frame_, cv2.COLOR_BGR2RGB)
+                    ret, _frame_ = cap.read() # Read the frame
+                    #for _frame__ in self.patch_frames_v(_frame_):
+                        #for frame_ in self.patch_frames_h(_frame__):
+                    scale_down_x = 0.25
+                    scale_down_y = 0.25
+                    frame_rgb = cv2.cvtColor(_frame_, cv2.COLOR_BGR2RGB)
+                    frame_res = cv2.resize(frame_rgb, None, fx= scale_down_x, fy= scale_down_y, interpolation= cv2.INTER_LINEAR)
                     if not ret:
                         print("File not found")
                     else:
                         #mdf_experts = self.clip_expert(frame_rgb, 3, 10)
-                        good_frame = self.mdf_selection(frame_rgb)
-                        if good_frame  == 1:
-                            mdf_experts = self.clip_expert(frame_rgb, 3, 10)
-                            scene_experts.append(mdf_experts)
-                return(scene_experts)
+                        #good_frame = self.mdf_selection(frame_rgb)
+                        #if good_frame  == 1:
+                        mdf_experts = self.clip_expert(frame_res, 10, 10)
+                        for object_ in mdf_experts[1][0]:
+                            objects_.append(object_)
+                        for location_ in mdf_experts[0]:
+                            locations_.append(location_)
+                        #else:
+                        #    print("Bad Frame")
+
+                counts = {item: objects_.count(item) for item in objects_}
+                sorted_objects = dict(sorted(counts.items(), key=lambda item: item[1], reverse = True))
+                counts = {item: locations_.count(item) for item in locations_}
+                sorted_locations = dict(sorted(counts.items(), key=lambda item: item[1], reverse = True))
+                print(sorted_objects)
+                return(list(islice(sorted_objects, 15)), list(islice(sorted_locations, 3)) )
 
 
 def main():
     cod = CLIP_OBJECT_DETECTOR()
     #clip.clip_encode_video('/home/dimas/0028_The_Crying_Game_00_53_53_876-00_53_55_522.mp4','Movies/114207205',0)
-    res = cod.clip_experts_for_moive('Movies/114207205', 0)
+    res = cod.clip_experts_for_moive('Movies/114206597', 1)
     print(res)
 
 
