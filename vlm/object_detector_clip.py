@@ -6,6 +6,7 @@ from PIL import Image
 import subprocess
 import os
 import sys
+from tqdm import tqdm
 from itertools import islice
 from pathlib import Path
 from vlm.clip_api import CLIP_API
@@ -119,7 +120,7 @@ class CLIP_OBJECT_DETECTOR:
                 place = place[0]
             place = place.replace('_', ' ')
             place_texts.append(place)
-        prmt = [f'Photo of a {p}' for p in place_texts]
+        prmt = [f'a movie frame of the {p}' for p in place_texts]
         place_feats = self.get_text_feats(prmt)
         return(place_feats, place_texts)
 
@@ -183,8 +184,16 @@ class CLIP_OBJECT_DETECTOR:
                 people = 0
             else:
                 people = 1
-            return(1, places, people)
-        return(0, 0, 0)
+            ppl_texts = ['a lot of objects', 'no sharp objects']
+            ppl_feats = self.get_text_feats([f'There are {p} in this photo.' for p in ppl_texts])
+            sorted_ppl_texts, ppl_scores = self.get_nn_text(ppl_texts, ppl_feats, img_feats, 0)
+            ppl_result = sorted_ppl_texts[0]
+            if ppl_result == 'no sharp objects':
+                objects = 0
+            else:
+                objects = 1
+            return(1, places, people, objects)
+        return(0, 0, 0, 0)
 
     def clip_persons_expert(self, frame, topk):
         img_feats = self.get_img_feats(frame)
@@ -205,73 +214,89 @@ class CLIP_OBJECT_DETECTOR:
     def clip_cifar_expert(self, frame, topk):
         img_feats = self.get_img_feats(frame)
         sorted_cifar, cifar_scores = self.get_nn_text(self.cifar_texts, \
-                                                        self.cifar_feats, img_feats, 0.10)
+                                                        self.cifar_feats, img_feats, 0.15)
         return(sorted_cifar[:topk])
 
     def clip_objects_expert(self, frame, topk):
         img_feats = self.get_img_feats(frame)
         sorted_obj_texts, obj_scores = self.get_nn_text(self.object_texts, \
-                                                        self.object_feats, img_feats, 0.14)
+                                                        self.object_feats, img_feats, 0.18)
         return(sorted_obj_texts[:topk])
 
-    def clip_experts_for_moive(self, movie_id, scene_element):
+    def clip_experts_for_scene_element(self, movie_id):
         movie_info, fps, fn = self.clip_api.download_and_get_minfo(movie_id, to_print=True)
         if (fn):
             remote_api = self.clip_api.nre
             metadata = remote_api.get_movie_info(movie_id)
-            mdfs = metadata['mdfs'][scene_element]
+           
             video_file = Path(fn)
             file_name = fn
             print(file_name)
+            first_frame = 0
+            last_frame = metadata['scene_elements'][-1][1]
             if video_file.is_file():
                 cap = cv2.VideoCapture(fn)
                 locations_ = []
-                objects_ = []
-                persons_ = []
-                number_of_ppl = []
-                for mdf in range(mdfs[0], mdfs[2]):
-                    cap.set(cv2.CAP_PROP_POS_FRAMES, mdf)
-                    ret, _frame_ = cap.read() # Read the frame
-                    #for _frame__ in self.patch_frames_v(_frame_):
-                        #for frame_ in self.patch_frames_h(_frame__):
-                    scale_down_x = 0.25
-                    scale_down_y = 0.25
-                    frame_rgb = cv2.cvtColor(_frame_, cv2.COLOR_BGR2RGB)
-                    #frame_res = cv2.resize(frame_rgb, None, fx= scale_down_x, fy= scale_down_y, interpolation= cv2.INTER_LINEAR)
-                    if not ret:
-                        print("File not found")
-                    else:
-                        #mdf_experts = self.clip_expert(frame_rgb, 3, 10)
-                        good_frame, pcl, ppl = self.mdf_selection(frame_rgb)
-                        #print("frame: ", good_frame, " place: ", pcl, " people: ", ppl)
+                scene_objects = {}
+                scene_persons = {}
+                scene_number_of_ppl = {}
+                
+                for scene_element, data in enumerate(metadata['scene_elements']):
+                    print("Scene element: ", scene_element)
+                    mdfs = metadata['mdfs'][scene_element]
+                    objects_ = []
+                    persons_ = []
+                    number_of_ppl = []
+                    for mdf in range(mdfs[0], mdfs[2]):
+                    #for mdf in tqdm(range(first_frame, last_frame)):
+                        cap.set(cv2.CAP_PROP_POS_FRAMES, mdf)
+                        ret, _frame_ = cap.read() # Read the frame
+                        #for _frame__ in self.patch_frames_v(_frame_):
+                            #for frame_ in self.patch_frames_h(_frame__):
+                        scale_down_x = 0.25
+                        scale_down_y = 0.25
+                        frame_rgb = cv2.cvtColor(_frame_, cv2.COLOR_BGR2RGB)
                         #frame_res = cv2.resize(frame_rgb, None, fx= scale_down_x, fy= scale_down_y, interpolation= cv2.INTER_LINEAR)
-                        frame_res = frame_rgb
-                        if good_frame  == 1:
-                            if pcl == 1:
-                                for loc in self.clip_location_expert(frame_res, 10):
-                                    locations_.append(loc)
-                                for obj in self.clip_cifar_expert(frame_res, 30):
-                                    objects_.append(obj)
-                            if ppl == 1:
-                                persons, number_of = self.clip_persons_expert(frame_res, 10)
-                                for pers in persons:
-                                    persons_.append(pers)
-                                for nbr in number_of:
-                                    number_of_ppl.append(nbr)
-
-                counts = {item: objects_.count(item) for item in objects_}
-                sorted_objects = dict(sorted(counts.items(), key=lambda item: item[1], reverse = True))
+                        if not ret:
+                            print("File not found")
+                        else:
+                            #mdf_experts = self.clip_expert(frame_rgb, 3, 10)
+                            good_frame, pcl, ppl, obj = self.mdf_selection(frame_rgb)
+                            print("frame: ", good_frame, " place: ", pcl, " people: ", ppl, "objects: ", obj)
+                            #frame_res = cv2.resize(frame_rgb, None, fx= scale_down_x, fy= scale_down_y, interpolation= cv2.INTER_LINEAR)
+                            frame_res = frame_rgb
+                            if good_frame  == 1:
+                                if pcl == 1:
+                                    for loc in self.clip_location_expert(frame_res, 10):
+                                        locations_.append(loc)
+                                if obj == 1:    
+                                    for obj_ in self.clip_cifar_expert(frame_res, 10):
+                                        objects_.append(obj_)
+                                if ppl == 1:
+                                    persons, number_of = self.clip_persons_expert(frame_res, 10)
+                                    for pers in persons:
+                                        persons_.append(pers)
+                                    for nbr in number_of:
+                                        number_of_ppl.append(nbr)
+                            print("Frame # ", mdf)
+                    counts = {item: objects_.count(item) for item in objects_}
+                    sorted_objects = dict(sorted(counts.items(), key=lambda item: item[1], reverse = True))
+                    sorted_objects = list(islice(sorted_objects, 10))
+                    scene_objects[scene_element] = sorted_objects
+                    counts = {item: persons_.count(item) for item in persons_}
+                    sorted_persons = dict(sorted(counts.items(), key=lambda item: item[1], reverse = True))
+                    sorted_persons = list(islice(sorted_persons, 10))
+                    scene_persons[scene_element] = sorted_persons
+                    
                 counts = {item: locations_.count(item) for item in locations_}
                 sorted_locations = dict(sorted(counts.items(), key=lambda item: item[1], reverse = True))
-                counts = {item: persons_.count(item) for item in persons_}
-                sorted_persons = dict(sorted(counts.items(), key=lambda item: item[1], reverse = True))
-                return(list(islice(sorted_objects, 5)), list(islice(sorted_locations, 3)), list(islice(sorted_persons, 10)))
+                return(list(islice(sorted_locations, 3)), scene_objects, scene_persons)
 
 
 def main():
     cod = CLIP_OBJECT_DETECTOR()
     #clip.clip_encode_video('/home/dimas/0028_The_Crying_Game_00_53_53_876-00_53_55_522.mp4','Movies/114207205',0) Movies/114208196
-    res = cod.clip_experts_for_moive('Movies/114208149', 1)
+    res = cod.clip_experts_for_scene_element('Movies/222511030')
     #res = cod.load_people_feats()
     print(res)
 
